@@ -1,10 +1,19 @@
-# caelestia-cli
+# caelestia-cli (ponkcore fork)
 
-The main control script for the Caelestia dotfiles.
+Fork of [`caelestia-dots/cli`](https://github.com/caelestia-dots/cli) — the
+side-effect layer for the Caelestia desktop shell: scheme switching, wallpaper
+management, screenshots, recording, clipboard, emoji picker, window resizer,
+and the `caelestia shell ...` IPC bridge.
+
+Deployed together with [`ponkcore/shell`](https://github.com/ponkcore/shell)
+through `nix-config`. See [`OWNERSHIP.md`](OWNERSHIP.md) for the split of
+responsibilities between the two forks.
 
 <details><summary id="dependencies">External dependencies</summary>
 
-- [`libnotfy`](https://gitlab.gnome.org/GNOME/libnotify) - sending notifications
+Provided by the Nix package; listed here for non-Nix builds.
+
+- [`libnotify`](https://gitlab.gnome.org/GNOME/libnotify) - sending notifications
 - [`swappy`](https://github.com/jtheoof/swappy) - screenshot editor
 - [`grim`](https://gitlab.freedesktop.org/emersion/grim) - taking screenshots
 - [`dart-sass`](https://github.com/sass/dart-sass) - discord theming
@@ -19,24 +28,15 @@ The main control script for the Caelestia dotfiles.
 
 ## Installation
 
-### Arch linux
-
-The CLI is available from the AUR as `caelestia-cli`. You can install it with an AUR helper
-like [`yay`](https://github.com/Jguer/yay) or manually downloading the PKGBUILD and running `makepkg -si`.
-
-A package following the latest commit also exists as `caelestia-cli-git`. This is bleeding edge
-and likely to be unstable/have bugs. Regular users are recommended to use the stable package
-(`caelestia-cli`).
-
 ### Nix
 
-You can run the CLI directly via `nix run`:
+This is the supported path for the fork.
 
 ```sh
-nix run github:caelestia-dots/cli
+nix run github:ponkcore/cli
 ```
 
-Or add it to your system configuration:
+Or add it to your configuration:
 
 ```nix
 {
@@ -44,62 +44,71 @@ Or add it to your system configuration:
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     caelestia-cli = {
-      url = "github:caelestia-dots/cli";
+      url = "github:ponkcore/cli";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 }
 ```
 
-The package is available as `caelestia-cli.packages.<system>.default`, which can be added to your
-`environment.systemPackages`, `users.users.<username>.packages`, `home.packages` if using home-manager,
-or a devshell. The CLI can then be used via the `caelestia` command.
+Packages:
 
-> [!TIP]
-> The default package does not have the shell enabled by default, which is required for full functionality.
-> To enable the shell, use the `with-shell` package. This is the recommended installation method, as
-> the CLI exposes the shell via the `shell` subcommand, meaning there is no need for the shell package
-> to be exposed.
+- `caelestia-cli.packages.<system>.default` — CLI alone
+- `caelestia-cli.packages.<system>.with-shell` — CLI plus
+  [`ponkcore/shell`](https://github.com/ponkcore/shell), which is what the
+  shell's Home Manager module uses. The `shell` subcommand and full
+  wallpaper/scheme functionality need the shell package present.
 
-For home-manager, you can also use the Caelestia's home manager module (explained in
-[configuring](https://github.com/caelestia-dots/shell?tab=readme-ov-file#home-manager-module)) that
-installs and configures the shell and the CLI.
+The `caelestia-shell` input in this repo's `flake.nix` points at
+`github:ponkcore/shell`. In `nix-config` the two follow each other, so the
+Quickshell and m3shapes nodes are shared instead of duplicated.
+
+There is no AUR package for this fork, and the `install` / `update`
+subcommands are upstream's dotfiles deployer — they are not used here and
+default to `caelestia-dots/caelestia`.
 
 ### Manual installation
 
-Install all [dependencies](#dependencies), then install
+Install all [dependencies](#dependencies), then
 [`python-build`](https://github.com/pypa/build),
 [`python-installer`](https://github.com/pypa/installer),
 [`python-hatch`](https://github.com/pypa/hatch) and
 [`python-hatch-vcs`](https://github.com/ofek/hatch-vcs).
 
-e.g. via an AUR helper (yay)
+On NixOS use `nix develop` rather than `pip install` — the interpreter lives
+in the read-only store and PEP 668 blocks both `pip install` and
+`pip install --user`.
 
 ```sh
-yay -S libnotify swappy grim dart-sass wl-clipboard slurp gpu-screen-recorder glib2 cliphist fuzzel python-build python-installer python-hatch python-hatch-vcs
-```
-
-Now, clone the repo, `cd` into it, build the wheel via `python -m build --wheel`
-and install it via `python -m installer dist/*.whl`. Then, to install the `fish`
-completions, copy the `completions/caelestia.fish` file to
-`/usr/share/fish/vendor_completions.d/caelestia.fish`.
-
-```sh
-git clone https://github.com/caelestia-dots/cli.git
+git clone https://github.com/ponkcore/cli.git
 cd cli
 python -m build --wheel
-sudo python -m installer dist/*.whl
-sudo cp completions/caelestia.fish /usr/share/fish/vendor_completions.d/caelestia.fish
+python -m installer dist/*.whl
+cp completions/caelestia.fish ~/.local/share/fish/vendor_completions.d/caelestia.fish
 ```
 
-### Additional steps
+### Optional integrations
 
-#### Auto folder colour theming
+Both shell out to `sudo -n`, so they need passwordless `sudo` for those narrow
+commands.
 
-For automatic Papirus folder icon colour syncing, you must have [`papirus-folders`](https://github.com/PapirusDevelopmentTeam/papirus-folders)
-installed, and `papirus-folders` must to be able to run with `sudo` without a password prompt.
+On this host `nix-config` grants the primary user `NOPASSWD: ALL`
+(`modules/nixos/security.nix`), so both work without a per-command sudoers
+entry — that is a deliberate trade-off for a personal laptop, not something to
+copy elsewhere. The per-command sudoers snippets below are the narrower
+alternative for a host that does not grant blanket NOPASSWD.
 
-You can allow this by creating a sudoers file:
+Papirus folder recolouring **is active** here: `apply_gtk()` calls
+`sync_papirus_colors()` unconditionally, and `enableGtk` is `true` in
+`~/.config/caelestia/cli.json`. Chromium theming is **not** — `enableChromium`
+is `false`, so `apply_chromium()` never runs. Note that `sync_papirus_colors()`
+returns silently when `papirus-folders` is missing from `PATH` or no Papirus
+icon directory exists, so a broken setup looks identical to a working one.
+
+#### Papirus folder colour theming
+
+Requires [`papirus-folders`](https://github.com/PapirusDevelopmentTeam/papirus-folders)
+runnable under `sudo` without a prompt. Narrower than blanket NOPASSWD:
 
 ```sh
 echo "$USER ALL=(ALL) NOPASSWD: $(which papirus-folders)" | sudo tee /etc/sudoers.d/papirus-folders
@@ -108,28 +117,20 @@ sudo chmod 440 /etc/sudoers.d/papirus-folders
 
 #### Chromium-based browser theming
 
-For live Chromium-based browser theming, the CLI must be allowed to create certain directories in `/etc`
-and write to them via `sudo` without a password prompt.
-
-You can allow this by creating a sudoers file:
-
-```fish
-# Fish shell
-for dir in /etc/chromium/policies/managed /etc/brave/policies/managed /etc/opt/chrome/policies/managed
-    echo "$USER ALL=(ALL) NOPASSWD: $(which mkdir) -p $dir" | sudo tee -a /etc/sudoers.d/caelestia-chromium
-    echo "$USER ALL=(ALL) NOPASSWD: $(which tee) $dir/caelestia.json" | sudo tee -a /etc/sudoers.d/caelestia-chromium
-end
-sudo chmod 440 /etc/sudoers.d/caelestia-chromium
-```
+The CLI must be able to create and write policy directories under `/etc`
+without a prompt:
 
 ```sh
-# Bash/other shells
 for dir in /etc/chromium/policies/managed /etc/brave/policies/managed /etc/opt/chrome/policies/managed; do
     echo "$USER ALL=(ALL) NOPASSWD: $(which mkdir) -p $dir" | sudo tee -a /etc/sudoers.d/caelestia-chromium
     echo "$USER ALL=(ALL) NOPASSWD: $(which tee) $dir/caelestia.json" | sudo tee -a /etc/sudoers.d/caelestia-chromium
 done
 sudo chmod 440 /etc/sudoers.d/caelestia-chromium
 ```
+
+On NixOS these directories belong to the corresponding package modules —
+prefer declaring the policy files in `nix-config` over granting `sudo` to
+`tee`.
 
 ## Usage
 
@@ -161,6 +162,12 @@ subcommands:
     install      install the Caelestia dotfiles
     update       update the Caelestia dotfiles
 ```
+
+> [!NOTE]
+> `install` and `update` are upstream's dotfiles deployer — they clone and
+> manage `caelestia-dots/caelestia` (see the `dots` key in
+> [Configuring](#configuring)). This fork is deployed by `nix-config`, so both
+> subcommands are inert here; do not run them against a NixOS system.
 
 ### User templates
 
