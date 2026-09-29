@@ -89,21 +89,33 @@ cp completions/caelestia.fish ~/.local/share/fish/vendor_completions.d/caelestia
 
 ### Optional integrations
 
-Both shell out to `sudo -n`, so they need passwordless `sudo` for those narrow
-commands.
+Both shell out to `sudo -n` for narrow commands (`papirus-folders`, and
+`mkdir`/`tee` into `/etc`). On this host `nix-config` grants the primary user
+`NOPASSWD: ALL` (`modules/nixos/security.nix`), so neither needs a per-command
+sudoers entry — a deliberate trade-off for a personal laptop, not something to
+copy elsewhere. The snippets below are the narrower alternative for a host that
+does not grant blanket NOPASSWD.
 
-On this host `nix-config` grants the primary user `NOPASSWD: ALL`
-(`modules/nixos/security.nix`), so both work without a per-command sudoers
-entry — that is a deliberate trade-off for a personal laptop, not something to
-copy elsewhere. The per-command sudoers snippets below are the narrower
-alternative for a host that does not grant blanket NOPASSWD.
+Neither integration does anything here, for two different reasons:
 
-Papirus folder recolouring **is active** here: `apply_gtk()` calls
-`sync_papirus_colors()` unconditionally, and `enableGtk` is `true` in
-`~/.config/caelestia/cli.json`. Chromium theming is **not** — `enableChromium`
-is `false`, so `apply_chromium()` never runs. Note that `sync_papirus_colors()`
-returns silently when `papirus-folders` is missing from `PATH` or no Papirus
-icon directory exists, so a broken setup looks identical to a working one.
+- **Papirus folder recolouring silently no-ops — and this is an upstream bug on
+  NixOS.** `apply_gtk()` calls `sync_papirus_colors()` unconditionally and
+  `enableGtk` is `true`, so the function runs; `papirus-folders` is installed and
+  `sudo -n` would succeed. But it early-returns before the sudo call because it
+  probes hardcoded FHS paths (`theme.py`: `/usr/share/icons/Papirus*`,
+  `~/.local/share/icons/Papirus`, `~/.icons/Papirus`). On NixOS none exist — the
+  icons live in the store and are exposed at
+  `/etc/profiles/per-user/<user>/share/icons/Papirus*` and
+  `/run/current-system/sw/share/icons/Papirus*`. So the guard
+  `if not any(p.exists() ...): return` trips and folder colours never sync.
+  Fixing it means teaching that probe about the NixOS icon paths; it is not a
+  permissions problem.
+- **Chromium theming is disabled outright:** `enableChromium` is `false` in
+  `~/.config/caelestia/cli.json`, so `apply_chromium()` never runs.
+
+Both failures are silent — `sync_papirus_colors()` returns without logging when
+the binary is missing *or* the icon dir probe fails, so a broken setup looks
+identical to a working one.
 
 #### Papirus folder colour theming
 
